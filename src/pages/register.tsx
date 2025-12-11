@@ -2,22 +2,74 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import { supabase } from '@/lib/supabase';
 
-const Login: React.FC = () => {
+interface FormData {
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+const Register: React.FC = () => {
   const router = useRouter();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [formData, setFormData] = useState<FormData>({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
     
-    if (username === 'admin' && password === 'admin123') {
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('username', username);
-      router.push('/dashboard');
-    } else {
-      setError('Username atau password salah!');
+    if (formData.password !== formData.confirmPassword) {
+      setError('Password tidak cocok!');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Insert user baru ke database
+      const { data, error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            username: formData.username,
+            email: formData.email,
+            password: formData.password // NOTE: Di production, hash password dulu!
+          }
+        ])
+        .select();
+
+      if (insertError) {
+        if (insertError.message.includes('duplicate')) {
+          setError('Username atau email sudah digunakan!');
+        } else {
+          setError('Gagal registrasi. Coba lagi.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      alert('Registrasi berhasil! Silakan login.');
+      router.push('/login');
+    } catch (err) {
+      console.error('Register error:', err);
+      setError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -26,7 +78,7 @@ const Login: React.FC = () => {
       <Navbar />
       <div className="flex justify-center items-center min-h-[calc(100vh-64px)] p-8">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-          <h2 className="text-2xl font-bold mb-6">Login</h2>
+          <h2 className="text-2xl font-bold mb-6">Daftar Akun Baru</h2>
           
           {error && (
             <div className="bg-red-500 text-white p-3 rounded mb-4">
@@ -39,46 +91,69 @@ const Login: React.FC = () => {
               <label className="block text-gray-700 mb-2">Username</label>
               <input
                 type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
+                disabled={loading}
               />
             </div>
             
-            <div className="mb-6">
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                required
+                disabled={loading}
+              />
+            </div>
+
+            <div className="mb-4">
               <label className="block text-gray-700 mb-2">Password</label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
+                disabled={loading}
+                minLength={6}
+              />
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-gray-700 mb-2">Konfirmasi Password</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                required
+                disabled={loading}
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+              className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 disabled:opacity-50"
+              disabled={loading}
             >
-              Login
+              {loading ? 'Loading...' : 'Daftar'}
             </button>
           </form>
 
           <div className="text-center mt-4">
-            <Link href="/forgot-password" className="text-blue-500 hover:underline">
-              Lupa Password?
+            Sudah punya akun?{' '}
+            <Link href="/login" className="text-blue-500 hover:underline">
+              Login di sini
             </Link>
-            <span className="mx-2">|</span>
-            <Link href="/register" className="text-blue-500 hover:underline">
-              Daftar Akun Baru
-            </Link>
-          </div>
-
-          <div className="mt-6 p-4 bg-gray-100 rounded">
-            <p className="font-bold">Demo Account:</p>
-            <p>Username: admin</p>
-            <p>Password: admin123</p>
           </div>
         </div>
       </div>
@@ -86,4 +161,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Register;

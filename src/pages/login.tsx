@@ -2,22 +2,46 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
+import { supabase } from '@/lib/supabase';
 
 const Login: React.FC = () => {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (username === 'admin' && password === 'admin123') {
+    setLoading(true);
+    setError('');
+
+    try {
+      // Query user dari database
+      const { data: users, error: queryError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password) // NOTE: Di production, pakai hash password!
+        .single();
+
+      if (queryError || !users) {
+        setError('Username atau password salah!');
+        setLoading(false);
+        return;
+      }
+
+      // Simpan session
       localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('username', username);
+      localStorage.setItem('username', users.username);
+      localStorage.setItem('userId', users.id);
+
       router.push('/dashboard');
-    } else {
-      setError('Username atau password salah!');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,6 +67,7 @@ const Login: React.FC = () => {
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
+                disabled={loading}
               />
             </div>
             
@@ -54,14 +79,16 @@ const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
+                disabled={loading}
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
+              disabled={loading}
             >
-              Login
+              {loading ? 'Loading...' : 'Login'}
             </button>
           </form>
 
@@ -76,9 +103,8 @@ const Login: React.FC = () => {
           </div>
 
           <div className="mt-6 p-4 bg-gray-100 rounded">
-            <p className="font-bold">Demo Account:</p>
-            <p>Username: admin</p>
-            <p>Password: admin123</p>
+            <p className="font-bold text-sm">Note:</p>
+            <p className="text-sm">Buat akun baru dulu via Register</p>
           </div>
         </div>
       </div>

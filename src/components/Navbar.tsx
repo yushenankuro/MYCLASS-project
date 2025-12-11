@@ -18,36 +18,67 @@ const Navbar: React.FC = () => {
     router.push('/login');
   };
 
+  const isActive = (path: string) => router.pathname === path;
+
   return (
-    <nav className="bg-gray-800 p-4">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <Link href="/" className="text-white text-2xl font-bold">
-          Website Kelas
-        </Link>
-        <div className="flex gap-6 items-center">
-          <Link href="/" className="text-white hover:text-gray-300">
-            Home
-          </Link>
-          <Link href="/about" className="text-white hover:text-gray-300">
-            About
-          </Link>
-          {isLoggedIn ? (
-            <>
-              <Link href="/dashboard" className="text-white hover:text-gray-300">
-                Dashboard
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+    <nav className="p-4 from-sky-300 to-sky-400">
+      <div className="max-w-5xl mx-auto">
+        <div className="bg-slate-600 rounded-full px-8 py-4 shadow-lg">
+          <div className="flex justify-center items-center">
+            {/* Menu items */}
+            <div className="flex gap-8 items-center">
+              <Link 
+                href="/" 
+                className={`text-lg font-medium hover:text-white transition-colors ${
+                  isActive('/') ? 'text-white' : 'text-gray-300'
+                }`}
               >
-                Logout
-              </button>
-            </>
-          ) : (
-            <Link href="/login" className="text-white hover:text-gray-300">
-              Login
-            </Link>
-          )}
+                Home
+              </Link>
+              <Link 
+                href="/about" 
+                className={`text-lg font-medium hover:text-white transition-colors ${
+                  isActive('/about') ? 'text-white' : 'text-gray-300'
+                }`}
+              >
+                About
+              </Link>
+              <Link 
+                href="/students" 
+                className={`text-lg font-medium hover:text-white transition-colors ${
+                  isActive('/') ? 'text-white' : 'text-gray-300'
+                }`}
+              >
+                Siswa
+              </Link>
+              
+              {isLoggedIn ? (
+                <>
+                  <Link 
+                    href="/dashboard" 
+                    className={`text-lg font-medium hover:text-white transition-colors ${
+                      isActive('/dashboard') ? 'text-white' : 'text-gray-300'
+                    }`}
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-red-500 text-white px-5 py-2 rounded-full hover:bg-red-600 transition-colors text-sm font-medium"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <Link 
+                  href="/login" 
+                  className="bg-teal-500 text-white px-5 py-2 rounded-full hover:bg-teal-600 transition-colors text-sm font-medium"
+                >
+                  Login
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </nav>

@@ -1,19 +1,33 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { supabase } from '@/lib/supabase';
 
 const Navbar: React.FC = () => {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  React.useEffect(() => {
-    const loggedIn = localStorage.getItem('isLoggedIn');
-    setIsLoggedIn(loggedIn === 'true');
+  // CEK USER SUDAH LOGIN MENGGUNAKAN SUPABASE AUTH
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      setIsLoggedIn(!!data.session);
+    };
+    checkUser();
+
+    // Listener bila user logout/login
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      checkUser();
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('username');
+  // LOGOUT PAKAI SUPABASE AUTH
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsLoggedIn(false);
     router.push('/login');
   };
@@ -35,6 +49,7 @@ const Navbar: React.FC = () => {
               >
                 Home
               </Link>
+
               <Link 
                 href="/about" 
                 className={`text-lg font-medium hover:text-white transition-colors ${
@@ -43,15 +58,16 @@ const Navbar: React.FC = () => {
               >
                 About
               </Link>
+
               <Link 
                 href="/students" 
                 className={`text-lg font-medium hover:text-white transition-colors ${
-                  isActive('/') ? 'text-white' : 'text-gray-300'
+                  isActive('/students') ? 'text-white' : 'text-gray-300'
                 }`}
               >
                 Siswa
               </Link>
-              
+
               {isLoggedIn ? (
                 <>
                   <Link 
@@ -62,6 +78,7 @@ const Navbar: React.FC = () => {
                   >
                     Dashboard
                   </Link>
+
                   <button
                     onClick={handleLogout}
                     className="bg-red-500 text-white px-5 py-2 rounded-full hover:bg-red-600 transition-colors text-sm font-medium"

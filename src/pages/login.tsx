@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 const Login: React.FC = () => {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,33 +16,21 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
 
-    try {
-      // Query user dari database
-      const { data: users, error: queryError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .eq('password', password) // NOTE: Di production, pakai hash password!
-        .single();
+    // LOGIN DENGAN SUPABASE AUTH
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
 
-      if (queryError || !users) {
-        setError('Username atau password salah!');
-        setLoading(false);
-        return;
-      }
-
-      // Simpan session
-      localStorage.setItem('isLoggedIn', 'true');
-      localStorage.setItem('username', users.username);
-      localStorage.setItem('userId', users.id);
-
-      router.push('/dashboard');
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Terjadi kesalahan. Coba lagi.');
-    } finally {
+    if (error) {
+      setError('Email atau password salah!');
       setLoading(false);
+      return;
     }
+
+    // LOGIN BERHASIL
+    router.push('/dashboard');
+    setLoading(false);
   };
 
   return (
@@ -60,11 +48,11 @@ const Login: React.FC = () => {
           
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Username</label>
+              <label className="block text-gray-700 mb-2">Email</label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
                 disabled={loading}
@@ -100,11 +88,6 @@ const Login: React.FC = () => {
             <Link href="/register" className="text-blue-500 hover:underline">
               Daftar Akun Baru
             </Link>
-          </div>
-
-          <div className="mt-6 p-4 bg-gray-100 rounded">
-            <p className="font-bold text-sm">Note:</p>
-            <p className="text-sm">Buat akun baru dulu via Register</p>
           </div>
         </div>
       </div>

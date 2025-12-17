@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 const Navbar: React.FC = () => {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // CEK USER SUDAH LOGIN MENGGUNAKAN SUPABASE AUTH
   useEffect(() => {
@@ -33,6 +34,14 @@ const Navbar: React.FC = () => {
   };
 
   const isActive = (path: string) => router.pathname === path;
+
+  // Check if any dashboard route is active
+  const isDashboardActive = () => {
+    return router.pathname === '/dashboard' || 
+           router.pathname === '/dashboard/daftar' || 
+           router.pathname === '/dashboard/nilai-rapor' || 
+           router.pathname === '/dashboard/presensi';
+  };
 
   return (
     <nav className="p-4 from-sky-300 to-sky-400">
@@ -67,6 +76,7 @@ const Navbar: React.FC = () => {
               >
                 Siswa
               </Link>
+              
               <Link 
                 href="/subject" 
                 className={`text-lg font-medium hover:text-white transition-colors ${
@@ -78,14 +88,61 @@ const Navbar: React.FC = () => {
 
               {isLoggedIn ? (
                 <>
-                  <Link 
-                    href="/dashboard" 
-                    className={`text-lg font-medium hover:text-white transition-colors ${
-                      isActive('/dashboard') ? 'text-white' : 'text-gray-300'
-                    }`}
+                  {/* Dashboard Dropdown */}
+                  <div 
+                    className="relative group"
                   >
-                    Dashboard
-                  </Link>
+                    <div
+                      className={`text-lg font-medium hover:text-white transition-colors flex items-center gap-1 cursor-default ${
+                        isDashboardActive() ? 'text-white' : 'text-gray-300'
+                      }`}
+                      onMouseEnter={() => setIsDropdownOpen(true)}
+                    >
+                      Dashboard
+                      <svg 
+                        className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+
+                    {/* Dropdown Menu */}
+                    {isDropdownOpen && (
+                      <div 
+                        className="absolute top-full mt-2 bg-slate-700 rounded-lg shadow-xl py-2 min-w-[180px] z-50"
+                        onMouseEnter={() => setIsDropdownOpen(true)}
+                        onMouseLeave={() => setIsDropdownOpen(false)}
+                      >
+                        <Link 
+                          href="/dashboard"
+                          className={`block px-4 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                            isActive('/dashboard') ? 'text-white bg-slate-600' : 'text-gray-300'
+                          }`}
+                        >
+                          Daftar
+                        </Link>
+                        <Link 
+                          href="/dashboard/nilai-rapor"
+                          className={`block px-4 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                            isActive('/dashboard/nilai-rapor') ? 'text-white bg-slate-600' : 'text-gray-300'
+                          }`}
+                        >
+                          Nilai & Rapor
+                        </Link>
+                        <Link 
+                          href="/dashboard/presensi"
+                          className={`block px-4 py-2 text-sm hover:bg-slate-600 transition-colors ${
+                            isActive('/dashboard/presensi') ? 'text-white bg-slate-600' : 'text-gray-300'
+                          }`}
+                        >
+                          Presensi
+                        </Link>
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     onClick={handleLogout}

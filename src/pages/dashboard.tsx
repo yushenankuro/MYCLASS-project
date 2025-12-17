@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/router";
-import Image from "next/image";
+import Select from 'react-select';
 
 interface Student {
   id: string;
@@ -11,7 +11,7 @@ interface Student {
   class: string;
   nisn: string;
   birth_date: string;
-  jenis_kelamin: string;
+  student_gender: string;
   photo_url?: string;
   created_at?: string;
 }
@@ -20,7 +20,8 @@ interface Teacher {
   id: string;
   name: string;
   email: string;
-  subject: string;
+  subjects: string[]; // Array of subjects
+  teacher_gender: string;
   photo_url?: string;
   created_at?: string;
 }
@@ -28,80 +29,93 @@ interface Teacher {
 interface FormData {
   name: string;
   email: string;
-  class: string;
   nisn: string;
   birth_date: string;
-  jenis_kelamin: string;
-  photo_url?: string;
+  student_gender: string;
 }
+
+interface TeacherFormData {
+  name: string;
+  email: string;
+  teacher_gender: string;
+  subjects: string[];
+}
+
+// Daftar semua mata pelajaran
+const allSubjects = [
+  'Bahasa Indonesia', 'Bahasa Inggris', 'Bahasa Jepang', 'Basis Data',
+  'Pemrograman Web', 'Pemrograman Mobile', 'Pemrograman Desktop',
+  'Pendidikan Agama', 'PJOK', 'PKN', 'PKK', 'Mapil', 'Matematika', 'Sejarah'
+];
 
 const Dashboard: React.FC = () => {
   const router = useRouter();
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [showTeacherForm, setShowTeacherForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState<FormData>({
-    name: "",
-    email: "",
-    class: "XI RPL 1",
-    nisn: "",
-    birth_date: "",
-    jenis_kelamin: "",
-    photo_url: "",
+    name: '',
+    email: '',
+    nisn: '',
+    birth_date: '',
+    student_gender: ''
   });
 
-  const [userEmail, setUserEmail] = useState("");
+  const [teacherFormData, setTeacherFormData] = useState<TeacherFormData>({
+    name: '',
+    email: '',
+    subjects: [],
+    teacher_gender: ''
+  });
+
+  const [userEmail, setUserEmail] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTeacher, setSearchTeacher] = useState('');
 
   // State untuk upload foto
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [photoPreview, setPhotoPreview] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
-  // State untuk guru
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [loadingTeacher, setLoadingTeacher] = useState(true);
-  const [showTeacherForm, setShowTeacherForm] = useState(false);
-  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
-  const [teacherSearch, setTeacherSearch] = useState("");
+  const [teacherPhotoFile, setTeacherPhotoFile] = useState<File | null>(null);
+  const [teacherPhotoPreview, setTeacherPhotoPreview] = useState<string>('');
+  const [uploadingTeacher, setUploadingTeacher] = useState(false);
 
-  const [teacherForm, setTeacherForm] = useState({
-    name: "",
-    email: "",
-    subject: "",
-  });
-
-const [teacherPhotoFile, setTeacherPhotoFile] = useState<File | null>(null);
-const [teacherPhotoPreview, setTeacherPhotoPreview] = useState("");
-const [uploadingTeacher, setUploadingTeacher] = useState(false);
+  // State untuk pagination
+  const [currentPageStudents, setCurrentPageStudents] = useState(1);
+  const [currentPageTeachers, setCurrentPageTeachers] = useState(1);
+  const itemsPerPage = 10;
 
   const checkAuth = async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
-      router.push("/login");
+      router.push('/login');
       return;
     }
-    setUserEmail(data.session.user.email || "");
+    setUserEmail(data.session.user.email || '');
   };
 
   const fetchStudents = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("students")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .from('students')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      console.log("Data berhasil dimuat:", data);
       setStudents(data || []);
-      setError("");
+      setError('');
     } catch (err: any) {
-      console.error("Error fetch:", err);
-      setError("Gagal memuat data siswa: " + err.message);
+      console.error('Error fetch:', err);
+      setError('Gagal memuat data siswa: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -110,22 +124,16 @@ const [uploadingTeacher, setUploadingTeacher] = useState(false);
   const fetchTeachers = async () => {
     try {
       const { data, error } = await supabase
-        .from("teachers")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .from('teachers')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setTeachers(data || []);
-    } catch (err) {
-      console.error("❌ Gagal fetch guru:", err);
-    } finally {
-      setLoadingTeacher(false);
+    } catch (err: any) {
+      console.error('Error fetch teachers:', err);
     }
   };
-
-  useEffect(() => {
-    fetchTeachers();
-  }, []);
 
   useEffect(() => {
     checkAuth();
@@ -133,20 +141,37 @@ const [uploadingTeacher, setUploadingTeacher] = useState(false);
     fetchTeachers();
   }, []);
 
+  // Get subjects yang sudah diambil guru lain
+  const getTakenSubjects = () => {
+    const taken: string[] = [];
+    teachers.forEach(teacher => {
+      if (teacher.id !== editingTeacherId && teacher.subjects) {
+        taken.push(...teacher.subjects);
+      }
+    });
+    return taken;
+  };
+
+  // Get available subjects untuk dipilih
+  const getAvailableSubjects = () => {
+    const takenSubjects = getTakenSubjects();
+    return allSubjects
+      .filter(subject => !takenSubjects.includes(subject))
+      .map(subject => ({ value: subject, label: subject }));
+  };
+
   const handleAdd = () => {
     setShowForm(true);
     setEditingId(null);
     setFormData({
-      name: "",
-      email: "",
-      class: "XI RPL 1",
-      nisn: "",
-      birth_date: "",
-      jenis_kelamin: "",
-      photo_url: "",
+      name: '',
+      email: '',
+      nisn: '',
+      birth_date: '',
+      student_gender: ''
     });
     setPhotoFile(null);
-    setPhotoPreview("");
+    setPhotoPreview('');
   };
 
   const handleEdit = (student: Student) => {
@@ -155,60 +180,52 @@ const [uploadingTeacher, setUploadingTeacher] = useState(false);
     setFormData({
       name: student.name,
       email: student.email,
-      class: student.class,
       nisn: student.nisn,
       birth_date: student.birth_date,
-      jenis_kelamin: student.jenis_kelamin,
-      photo_url: student.photo_url,
+      student_gender: student.student_gender
     });
-    setPhotoPreview(student.photo_url || "");
+    setPhotoPreview(student.photo_url || '');
     setPhotoFile(null);
   };
 
+  const handleAddTeacher = () => {
+    setShowTeacherForm(true);
+    setEditingTeacherId(null);
+    setTeacherFormData({
+      name: '',
+      email: '',
+      subjects: [],
+      teacher_gender: ''
+    });
+    setTeacherPhotoFile(null);
+    setTeacherPhotoPreview('');
+  };
+
   const handleEditTeacher = (teacher: Teacher) => {
+    setShowTeacherForm(true);
     setEditingTeacherId(teacher.id);
-    setTeacherForm({
+    setTeacherFormData({
       name: teacher.name,
       email: teacher.email,
-      subject: teacher.subject,
+      subjects: teacher.subjects || [],
+      teacher_gender: teacher.teacher_gender
     });
-    setShowTeacherForm(true);
+    setTeacherPhotoPreview(teacher.photo_url || '');
+    setTeacherPhotoFile(null);
   };
 
-  const handleDeleteTeacher = async (id: string) => {
-    if (!window.confirm("Yakin ingin menghapus guru ini?")) return;
-
-    try {
-      const { error } = await supabase.from("teachers").delete().eq("id", id);
-
-      if (error) throw error;
-
-      alert("Guru berhasil dihapus");
-      setTeachers(teachers.filter((t) => t.id !== id));
-    } catch (err: any) {
-      alert("Gagal hapus guru: " + err.message);
-    }
-  };
-
-  // Handle file input change
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validasi file
-      if (!file.type.startsWith("image/")) {
-        alert("File harus berupa gambar!");
+      if (!file.type.startsWith('image/')) {
+        alert('File harus berupa gambar!');
         return;
       }
-
       if (file.size > 2 * 1024 * 1024) {
-        // Max 2MB
-        alert("Ukuran file maksimal 2MB!");
+        alert('Ukuran file maksimal 2MB!');
         return;
       }
-
       setPhotoFile(file);
-
-      // Preview image
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
@@ -217,272 +234,365 @@ const [uploadingTeacher, setUploadingTeacher] = useState(false);
     }
   };
 
-  // Upload foto ke Supabase Storage
-  const uploadPhoto = async (file: File, nisn: string): Promise<string> => {
+  const handleTeacherPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('File harus berupa gambar!');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Ukuran file maksimal 2MB!');
+        return;
+      }
+      setTeacherPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTeacherPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadPhoto = async (file: File, identifier: string, bucket: string): Promise<string> => {
     try {
-      // Generate unique filename
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${nisn}_${Date.now()}.${fileExt}`;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${identifier}_${Date.now()}.${fileExt}`;
       const filePath = `photos/${fileName}`;
 
-      console.log("📤 Uploading photo:", filePath);
-
-      // Upload file
-      const { data, error } = await supabase.storage
-        .from("student-photos")
+      const { error } = await supabase.storage
+        .from(bucket)
         .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
+          cacheControl: '3600',
+          upsert: false
         });
 
       if (error) throw error;
 
-      // Get public URL
       const { data: urlData } = supabase.storage
-        .from("student-photos")
+        .from(bucket)
         .getPublicUrl(filePath);
 
-      console.log("Photo uploaded:", urlData.publicUrl);
       return urlData.publicUrl;
     } catch (error: any) {
-      console.error("Upload error:", error);
-      throw new Error("Gagal upload foto: " + error.message);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Yakin ingin menghapus siswa ini?")) return;
-
-    try {
-      // Get student data untuk hapus foto
-      const student = students.find((s) => s.id === id);
-
-      // Delete dari database
-      const { error } = await supabase.from("students").delete().eq("id", id);
-
-      if (error) throw error;
-
-      // Delete foto dari storage (optional)
-      if (student?.photo_url) {
-        const path = student.photo_url.split("/").slice(-2).join("/");
-        await supabase.storage.from("student-photos").remove([path]);
-      }
-
-      console.log("Siswa berhasil dihapus");
-      setStudents(students.filter((s) => s.id !== id));
-      alert("Siswa berhasil dihapus!");
-    } catch (err: any) {
-      console.error("Error delete:", err);
-      alert("Gagal menghapus siswa: " + err.message);
+      throw new Error('Gagal upload foto: ' + error.message);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !formData.name ||
-      !formData.email ||
-      !formData.nisn ||
-      !formData.birth_date ||
-      !formData.class ||
-      !formData.jenis_kelamin
-    ) {
-      alert("Semua field harus diisi!");
+    if (!formData.name || !formData.email || !formData.nisn || 
+        !formData.birth_date || !formData.student_gender) {
+      alert('Semua field harus diisi!');
       return;
     }
 
     if (formData.nisn.length !== 10) {
-      alert("NISN harus 10 digit!");
+      alert('NISN harus 10 digit!');
       return;
     }
 
     try {
       setUploading(true);
-      let photoUrl = formData.photo_url || "";
+      let photoUrl = '';
 
-      // Upload foto jika ada file baru
       if (photoFile) {
-        photoUrl = await uploadPhoto(photoFile, formData.nisn);
+        photoUrl = await uploadPhoto(photoFile, formData.nisn, 'student-photos');
       }
 
       const studentData = {
-        name: formData.name,
-        email: formData.email,
-        nisn: formData.nisn,
-        birth_date: formData.birth_date,
-        class: formData.class,
-        jenis_kelamin: formData.jenis_kelamin,
-        photo_url: photoUrl,
+        ...formData,
+        class: 'XI RPL 1',
+        photo_url: photoUrl || undefined
       };
 
       if (editingId) {
-        console.log("📝 Updating student:", editingId, studentData);
-
-        const { data, error } = await supabase
-          .from("students")
-          .update({
-            ...studentData,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingId)
-          .select();
+        const { error } = await supabase
+          .from('students')
+          .update(studentData)
+          .eq('id', editingId);
 
         if (error) throw error;
-        console.log("Update berhasil:", data);
-        alert("Siswa berhasil diupdate!");
+        alert('Siswa berhasil diupdate!');
       } else {
-        console.log("Inserting new student:", studentData);
-
-        const { data, error } = await supabase
-          .from("students")
-          .insert([studentData])
-          .select();
+        const { error } = await supabase
+          .from('students')
+          .insert([studentData]);
 
         if (error) throw error;
-        console.log("Insert berhasil:", data);
-        alert("Siswa berhasil ditambahkan!");
+        alert('Siswa berhasil ditambahkan!');
       }
 
       await fetchStudents();
       setShowForm(false);
       setFormData({
-        name: "",
-        email: "",
-        class: "XI RPL 1",
-        nisn: "",
-        birth_date: "",
-        jenis_kelamin: "",
-        photo_url: "",
+        name: '',
+        email: '',
+        nisn: '',
+        birth_date: '',
+        student_gender: ''
       });
       setPhotoFile(null);
-      setPhotoPreview("");
+      setPhotoPreview('');
       setEditingId(null);
     } catch (err: any) {
-      console.error("Error submit:", err);
-      alert("Gagal menyimpan data: " + err.message);
+      console.error('Error submit:', err);
+      alert('Gagal menyimpan data: ' + err.message);
     } finally {
       setUploading(false);
     }
   };
 
-const handleTeacherSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSubmitTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  if (!teacherForm.name || !teacherForm.email || !teacherForm.subject) {
-    alert("Semua field wajib diisi");
-    return;
-  }
-
-  try {
-    setUploadingTeacher(true);
-    let photoUrl = "";
-
-    if (teacherPhotoFile) {
-      photoUrl = await uploadTeacherPhoto(
-        teacherPhotoFile,
-        teacherForm.email
-      );
+    if (!teacherFormData.name || !teacherFormData.email || 
+        teacherFormData.subjects.length === 0) {
+      alert('Semua field harus diisi dan minimal pilih 1 mata pelajaran!');
+      return;
     }
 
-    const payload = {
-      ...teacherForm,
-      photo_url: photoUrl || undefined,
-    };
+    try {
+      setUploadingTeacher(true);
+      let photoUrl = '';
 
-    if (editingTeacherId) {
-      await supabase
-        .from("teachers")
-        .update(payload)
-        .eq("id", editingTeacherId);
-      alert("Guru diupdate");
-    } else {
-      await supabase.from("teachers").insert([payload]);
-      alert("Guru ditambahkan");
+      if (teacherPhotoFile) {
+        photoUrl = await uploadPhoto(teacherPhotoFile, teacherFormData.email, 'teacher-photos');
+      }
+
+      const teacherData = {
+        ...teacherFormData,
+        photo_url: photoUrl || undefined
+      };
+
+      if (editingTeacherId) {
+        const { error } = await supabase
+          .from('teachers')
+          .update(teacherData)
+          .eq('id', editingTeacherId);
+
+        if (error) throw error;
+        alert('Guru berhasil diupdate!');
+      } else {
+        const { error } = await supabase
+          .from('teachers')
+          .insert([teacherData]);
+
+        if (error) throw error;
+        alert('Guru berhasil ditambahkan!');
+      }
+
+      await fetchTeachers();
+      setShowTeacherForm(false);
+      setTeacherFormData({
+        name: '',
+        email: '',
+        subjects: [],
+        teacher_gender: ''
+      });
+      setTeacherPhotoFile(null);
+      setTeacherPhotoPreview('');
+      setEditingTeacherId(null);
+    } catch (err: any) {
+      console.error('Error submit teacher:', err);
+      alert('Gagal menyimpan data guru: ' + err.message);
+    } finally {
+      setUploadingTeacher(false);
     }
-
-    setTeacherForm({ name: "", email: "", subject: "" });
-    setTeacherPhotoFile(null);
-    setTeacherPhotoPreview("");
-    setShowTeacherForm(false);
-    setEditingTeacherId(null);
-    fetchTeachers();
-  } catch (err: any) {
-    alert("Gagal simpan guru: " + err.message);
-  } finally {
-    setUploadingTeacher(false);
-  }
-};
-
-  const handleTeacherPhotoChange = (
-  e: React.ChangeEvent<HTMLInputElement>
-) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    alert("File harus berupa gambar");
-    return;
-  }
-
-  if (file.size > 2 * 1024 * 1024) {
-    alert("Format: JPG, PNG (Max 2MB)");
-    return;
-  }
-
-  setTeacherPhotoFile(file);
-
-  const reader = new FileReader();
-  reader.onloadend = () => {
-    setTeacherPhotoPreview(reader.result as string);
   };
-  reader.readAsDataURL(file);
-};
 
-const uploadTeacherPhoto = async (
-  file: File,
-  email: string
-): Promise<string> => {
-  const ext = file.name.split(".").pop();
-  const fileName = `${email}_${Date.now()}.${ext}`;
-  const filePath = `photos/${fileName}`;
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Yakin ingin menghapus siswa ini?')) return;
 
-  const { error } = await supabase.storage
-    .from("teacher-photos")
-    .upload(filePath, file);
+    try {
+      const { error } = await supabase.from('students').delete().eq('id', id);
+      if (error) throw error;
 
-  if (error) throw error;
+      setStudents(students.filter((s) => s.id !== id));
+      alert('Siswa berhasil dihapus!');
+    } catch (err: any) {
+      alert('Gagal menghapus siswa: ' + err.message);
+    }
+  };
 
-  const { data } = supabase.storage
-    .from("teacher-photos")
-    .getPublicUrl(filePath);
+  const handleDeleteTeacher = async (id: string) => {
+    if (!window.confirm('Yakin ingin menghapus guru ini?')) return;
 
-  return data.publicUrl;
-};
+    try {
+      const { error } = await supabase.from('teachers').delete().eq('id', id);
+      if (error) throw error;
 
+      setTeachers(teachers.filter((t) => t.id !== id));
+      alert('Guru berhasil dihapus!');
+    } catch (err: any) {
+      alert('Gagal menghapus guru: ' + err.message);
+    }
+  };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    const options: Intl.DateTimeFormatOptions = {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    return new Date(dateString).toLocaleDateString("id-ID", options);
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.nisn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.class.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter data siswa
+  const filteredStudents = students.filter(student =>
+    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    student.nisn.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredTeachers = teachers.filter(
-    (t) =>
-      t.name.toLowerCase().includes(teacherSearch.toLowerCase()) ||
-      t.subject.toLowerCase().includes(teacherSearch.toLowerCase())
+  // Filter data guru
+  const filteredTeachers = teachers.filter(teacher =>
+    teacher.name.toLowerCase().includes(searchTeacher.toLowerCase()) ||
+    (teacher.subjects && teacher.subjects.some(s => 
+      s.toLowerCase().includes(searchTeacher.toLowerCase())
+    ))
   );
+
+  // Pagination untuk siswa
+  const totalPagesStudents = Math.ceil(filteredStudents.length / itemsPerPage);
+  const startIndexStudents = (currentPageStudents - 1) * itemsPerPage;
+  const endIndexStudents = startIndexStudents + itemsPerPage;
+  const currentStudents = filteredStudents.slice(startIndexStudents, endIndexStudents);
+
+  // Pagination untuk guru
+  const totalPagesTeachers = Math.ceil(filteredTeachers.length / itemsPerPage);
+  const startIndexTeachers = (currentPageTeachers - 1) * itemsPerPage;
+  const endIndexTeachers = startIndexTeachers + itemsPerPage;
+  const currentTeachers = filteredTeachers.slice(startIndexTeachers, endIndexTeachers);
+
+  // Fungsi untuk mengubah halaman
+  const handlePageChangeStudents = (page: number) => {
+    setCurrentPageStudents(page);
+  };
+
+  const handlePageChangeTeachers = (page: number) => {
+    setCurrentPageTeachers(page);
+  };
+
+  // Reset halaman saat search berubah
+  useEffect(() => {
+    setCurrentPageStudents(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPageTeachers(1);
+  }, [searchTeacher]);
+
+  // Komponen pagination
+  const Pagination = ({ 
+    currentPage, 
+    totalPages, 
+    onPageChange,
+    color = 'teal'
+  }: { 
+    currentPage: number; 
+    totalPages: number; 
+    onPageChange: (page: number) => void;
+    color?: string;
+  }) => {
+    if (totalPages <= 1) return null;
+
+    const pageNumbers = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    const colorClasses = {
+      teal: 'bg-teal-500 hover:bg-teal-600',
+      purple: 'bg-purple-500 hover:bg-purple-600',
+      blue: 'bg-blue-500 hover:bg-blue-600'
+    };
+
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+        {/* Tombol Previous */}
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`px-4 py-2 rounded-lg ${
+            currentPage === 1 
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+              : `${colorClasses[color as keyof typeof colorClasses]} text-white`
+          } transition-colors`}
+        >
+          &larr; Prev
+        </button>
+
+        {/* Halaman pertama */}
+        {startPage > 1 && (
+          <>
+            <button
+              onClick={() => onPageChange(1)}
+              className={`px-4 py-2 rounded-lg ${colorClasses[color as keyof typeof colorClasses]} text-white`}
+            >
+              1
+            </button>
+            {startPage > 2 && <span className="px-2 text-gray-500">...</span>}
+          </>
+        )}
+
+        {/* Nomor halaman */}
+        {pageNumbers.map(page => (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
+            className={`px-4 py-2 rounded-lg ${
+              currentPage === page
+                ? 'bg-gray-800 text-white'
+                : `${colorClasses[color as keyof typeof colorClasses]} text-white`
+            } transition-colors`}
+          >
+            {page}
+          </button>
+        ))}
+
+        {/* Halaman terakhir */}
+        {endPage < totalPages && (
+          <>
+            {endPage < totalPages - 1 && <span className="px-2 text-gray-500">...</span>}
+            <button
+              onClick={() => onPageChange(totalPages)}
+              className={`px-4 py-2 rounded-lg ${colorClasses[color as keyof typeof colorClasses]} text-white`}
+            >
+              {totalPages}
+            </button>
+          </>
+        )}
+
+        {/* Tombol Next */}
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`px-4 py-2 rounded-lg ${
+            currentPage === totalPages
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : `${colorClasses[color as keyof typeof colorClasses]} text-white`
+          } transition-colors`}
+        >
+          Next &rarr;
+        </button>
+
+        {/* Info halaman */}
+        <div className="ml-4 text-sm text-gray-600">
+          Halaman <span className="font-bold">{currentPage}</span> dari <span className="font-bold">{totalPages}</span>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -502,13 +612,10 @@ const uploadTeacherPhoto = async (
     <div className="min-h-screen bg-gradient-to-b from-sky-300 to-sky-400">
       <Navbar />
       <div className="max-w-7xl mx-auto p-8">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-800 mb-2">
-            Dashboard Admin
-          </h1>
-          <p className="text-slate-700 text-lg">
-            Selamat datang, <b>{userEmail}</b>!
-          </p>
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">Daftar Kelas XI RPL 1</h1>
+          <p className="text-slate-700 text-lg">Selamat datang, <b>{userEmail}</b>!</p>
         </div>
 
         {error && (
@@ -517,430 +624,224 @@ const uploadTeacherPhoto = async (
           </div>
         )}
 
-        <div className="mt-20 bg-white rounded-3xl shadow-lg overflow-hidden">
-          {/* HEADER */}
-          <div className="px-6 py-6 border-b border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800">
-                Daftar Siswa
-              </h2>
-              <p className="text-slate-600 mt-1">
-                Total: {students.length} siswa
-              </p>
-            </div>
+        {/* ===================  TABEL SISWA =================== */}
+        <div className="bg-white rounded-3xl shadow-lg overflow-hidden mb-8">
+          {/* Header dengan Search */}
+          <div className="px-6 py-6 border-b border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Daftar Siswa</h2>
+                <p className="text-slate-600 mt-1">
+                  Total: {students.length} siswa | 
+                  Ditampilkan: {currentStudents.length} dari {filteredStudents.length} hasil pencarian
+                </p>
+              </div>
 
-            <div className="flex gap-3 w-full md:w-auto">
-              <input
-                type="text"
-                placeholder="Cari siswa..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-1 md:w-64 px-4 py-2 border border-slate-300 rounded-full focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none"
-              />
+              <div className="flex gap-3 w-full md:w-auto">
+                <input
+                  type="text"
+                  placeholder="Cari siswa..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 md:w-64 px-4 py-2 border border-slate-300 rounded-full focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none"
+                />
 
-              <button
-                onClick={handleAdd}
-                className="bg-teal-500 text-white px-6 py-3 rounded-full hover:bg-teal-600 transition-colors shadow-md font-medium whitespace-nowrap"
-              >
-                + Tambah Siswa
-              </button>
+                <button
+                  onClick={handleAdd}
+                  className="bg-teal-500 text-white px-6 py-3 rounded-full hover:bg-teal-600 transition-colors shadow-md font-medium whitespace-nowrap"
+                >
+                  + Tambah Siswa
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {showForm && (
-          <div className="px-6 py-6 bg-slate-50 border-b">
-            <h3 className="text-2xl font-bold text-slate-800 mb-6">
-              {editingId ? "Edit Siswa" : "Tambah Siswa Baru"}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* UPLOAD FOTO */}
-                <div className="md:col-span-2">
-                  <label className="block text-slate-700 font-medium mb-3">
-                    Foto Siswa
-                  </label>
-
-                  <div className="flex flex-col md:flex-row gap-6 items-start">
-                    {/* Preview */}
-                    <div className="flex-shrink-0">
-                      <div className="w-40 h-48 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
-                        {photoPreview ? (
-                          <img
-                            src={photoPreview}
-                            alt="Preview"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="text-center p-4">
-                            <svg
-                              className="w-12 h-12 text-slate-400 mx-auto mb-2"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                              />
-                            </svg>
-                            <p className="text-xs text-slate-500">
-                              Preview Foto
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Upload Button */}
-                    <div className="flex-1">
-                      <input
-                        type="file"
-                        id="photo"
-                        accept="image/*"
-                        onChange={handlePhotoChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="photo"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 cursor-pointer transition-colors"
-                      >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                          />
-                        </svg>
-                        Pilih Foto
-                      </label>
-
-                      <p className="text-sm text-slate-500 mt-2">
-                        Format: JPG, PNG (Max 2MB)
-                      </p>
-
-                      {photoFile && (
-                        <p className="text-sm text-green-600 mt-2">
-                          {photoFile.name} dipilih
-                        </p>
-                      )}
-                    </div>
+          {/* Form Siswa */}
+          {showForm && (
+            <div className="px-6 py-6 bg-slate-50 border-b border-slate-200">
+              <h3 className="text-xl font-bold text-slate-800 mb-4">
+                {editingId ? 'Edit Siswa' : 'Tambah Siswa Baru'}
+              </h3>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Upload Foto */}
+                <div className="flex gap-4 items-start">
+                  <div className="w-32 h-40 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
+                    {photoPreview ? (
+                      <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      id="photo"
+                      accept="image/*"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="photo"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600"
+                    >
+                      📷 Pilih Foto
+                    </label>
+                    <p className="text-sm text-slate-500 mt-2">Max 2MB (JPG, PNG)</p>
                   </div>
                 </div>
 
-                {/* Nama */}
-                <div>
-                  <label className="block text-slate-700 font-medium mb-2">
-                    Nama Lengkap <span className="text-red-500">*</span>
-                  </label>
+                <div className="grid md:grid-cols-2 gap-4">
                   <input
                     type="text"
+                    placeholder="Nama Lengkap *"
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
-                    placeholder="Contoh: Ahmad Rizki"
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
                     required
                   />
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-slate-700 font-medium mb-2">
-                    Email <span className="text-red-500">*</span>
-                  </label>
                   <input
                     type="email"
+                    placeholder="Email *"
                     value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
-                    placeholder="contoh@email.com"
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
                     required
                   />
-                </div>
-
-                {/* NISN */}
-                <div>
-                  <label className="block text-slate-700 font-medium mb-2">
-                    NISN (10 digit) <span className="text-red-500">*</span>
-                  </label>
                   <input
                     type="text"
+                    placeholder="NISN (10 digit) *"
                     value={formData.nisn}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nisn: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
-                    placeholder="0012345678"
+                    onChange={(e) => setFormData({...formData, nisn: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
                     required
                     maxLength={10}
-                    pattern="[0-9]{10}"
                   />
-                </div>
-
-                {/* Tgl Lahir */}
-                <div>
-                  <label className="block text-slate-700 font-medium mb-2">
-                    Tanggal Lahir <span className="text-red-500">*</span>
-                  </label>
                   <input
                     type="date"
                     value={formData.birth_date}
-                    onChange={(e) =>
-                      setFormData({ ...formData, birth_date: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all"
+                    onChange={(e) => setFormData({...formData, birth_date: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
                     required
                   />
                 </div>
 
-                {/* JENIS KELAMIN */}
-                <div className="md:col-span-2">
-                  <label className="block text-slate-700 font-medium mb-3">
-                    Jenis Kelamin <span className="text-red-500">*</span>
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="student_gender"
+                      value="Laki-laki"
+                      checked={formData.student_gender === 'Laki-laki'}
+                      onChange={(e) => setFormData({...formData, student_gender: e.target.value})}
+                      required
+                    />
+                    👨 Laki-laki
                   </label>
-                  <div className="flex gap-6">
-                    <label className="flex items-center cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="jenis_kelamin"
-                        value="Laki-laki"
-                        checked={formData.jenis_kelamin === "Laki-laki"}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            jenis_kelamin: e.target.value,
-                          })
-                        }
-                        className="w-5 h-5 text-teal-500 focus:ring-2 focus:ring-teal-400 cursor-pointer"
-                        required
-                      />
-                      <span className="ml-3 text-slate-700 font-medium group-hover:text-teal-600 transition-colors flex items-center gap-2">
-                        <span className="text-2xl">👨</span>
-                        Laki-laki
-                      </span>
-                    </label>
-
-                    <label className="flex items-center cursor-pointer group">
-                      <input
-                        type="radio"
-                        name="jenis_kelamin"
-                        value="Perempuan"
-                        checked={formData.jenis_kelamin === "Perempuan"}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            jenis_kelamin: e.target.value,
-                          })
-                        }
-                        className="w-5 h-5 text-teal-500 focus:ring-2 focus:ring-teal-400 cursor-pointer"
-                        required
-                      />
-                      <span className="ml-3 text-slate-700 font-medium group-hover:text-teal-600 transition-colors flex items-center gap-2">
-                        <span className="text-2xl">👩</span>
-                        Perempuan
-                      </span>
-                    </label>
-                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="student_gender"
+                      value="Perempuan"
+                      checked={formData.student_gender === 'Perempuan'}
+                      onChange={(e) => setFormData({...formData, student_gender: e.target.value})}
+                      required
+                    />
+                    👩 Perempuan
+                  </label>
                 </div>
 
-                {/* KELAS */}
-                <div className="md:col-span-2">
-                  <label className="block text-slate-700 font-medium mb-2">
-                    Kelas <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.class}
-                    readOnly
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-slate-100 text-slate-700 font-semibold cursor-not-allowed"
-                  />
-                  <p className="text-sm text-slate-500 mt-1">
-                    ℹ️ Kelas otomatis diisi: XI RPL 1
-                  </p>
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={uploading}
+                    className="bg-teal-500 text-white px-6 py-3 rounded-full hover:bg-teal-600 disabled:opacity-50"
+                  >
+                    {uploading ? '⏳ Menyimpan...' : '💾 Simpan'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingId(null);
+                      setFormData({name:'', email:'', nisn:'', birth_date:'', student_gender:''});
+                      setPhotoFile(null);
+                      setPhotoPreview('');
+                    }}
+                    className="bg-slate-400 text-white px-6 py-3 rounded-full hover:bg-slate-500"
+                  >
+                    ✖️ Batal
+                  </button>
                 </div>
-              </div>
+              </form>
+            </div>
+          )}
 
-              <div className="flex gap-4 mt-8">
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="flex-1 bg-teal-500 text-white px-8 py-3 rounded-full hover:bg-teal-600 transition-colors shadow-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {uploading ? "⏳ Menyimpan..." : "💾 Simpan Data"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    setFormData({
-                      name: "",
-                      email: "",
-                      class: "XI RPL 1",
-                      nisn: "",
-                      birth_date: "",
-                      jenis_kelamin: "",
-                      photo_url: "",
-                    });
-                    setPhotoFile(null);
-                    setPhotoPreview("");
-                  }}
-                  className="flex-1 bg-slate-400 text-white px-8 py-3 rounded-full hover:bg-slate-500 transition-colors font-medium"
-                >
-                  Batal
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* TABLE - sama seperti sebelumnya, tambahkan kolom foto jika perlu */}
-        <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+          {/* Tabel Siswa */}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    No
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Foto
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Nama
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    NISN
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Jenis Kelamin
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Tanggal Lahir
-                  </th>
-                  <th className="px-6 py-4 text-left text-white font-semibold">
-                    Kelas
-                  </th>
-                  <th className="px-6 py-4 text-center text-white font-semibold">
-                    Aksi
-                  </th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">No</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Foto</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Nama</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">NISN</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Jenis Kelamin</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Email</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Tanggal Lahir</th>
+                  <th className="px-6 py-4 text-center text-white font-semibold">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredStudents.length === 0 ? (
+                {currentStudents.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={9}
-                      className="px-6 py-12 text-center text-slate-500"
-                    >
+                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                       <div className="text-6xl mb-4">📚</div>
                       <p className="text-lg font-medium">
-                        {searchTerm
-                          ? "Tidak ada hasil pencarian"
-                          : "Belum ada data siswa"}
-                      </p>
-                      <p className="text-sm text-slate-400 mt-1">
-                        {searchTerm
-                          ? "Coba kata kunci lain"
-                          : 'Klik "Tambah Siswa" untuk memulai'}
+                        {searchTerm ? 'Tidak ada hasil pencarian' : 'Belum ada data siswa'}
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  filteredStudents.map((student, index) => (
-                    <tr
-                      key={student.id}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-6 py-4 text-slate-700">{index + 1}</td>
+                  currentStudents.map((student, index) => (
+                    <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 text-slate-700">{startIndexStudents + index + 1}</td>
                       <td className="px-6 py-4">
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200">
                           {student.photo_url ? (
-                            <img
-                              src={student.photo_url}
-                              alt={student.name}
-                              className="w-full h-full object-cover"
-                            />
+                            <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-400">
-                              <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                />
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-800 font-medium">
-                        {student.name}
-                      </td>
+                      <td className="px-6 py-4 text-slate-800 font-medium">{student.name}</td>
+                      <td className="px-6 py-4 font-mono text-slate-700">{student.nisn}</td>
                       <td className="px-6 py-4">
-                        <span className="font-mono text-slate-700">
-                          {student.nisn}
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                          student.student_gender === 'Laki-laki' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
+                        }`}>
+                          {student.student_gender === 'Laki-laki' ? '👨' : '👩'} {student.student_gender}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                            student.jenis_kelamin === "Laki-laki"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-pink-100 text-pink-700"
-                          }`}
-                        >
-                          <span className="text-lg">
-                            {student.jenis_kelamin === "Laki-laki"
-                              ? "👨"
-                              : "👩"}
-                          </span>
-                          {student.jenis_kelamin}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-700">
-                        {student.email}
-                      </td>
-                      <td className="px-6 py-4 text-slate-700">
-                        {formatDate(student.birth_date)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
-                          {student.class}
-                        </span>
-                      </td>
+                      <td className="px-6 py-4 text-slate-700">{student.email}</td>
+                      <td className="px-6 py-4 text-slate-700">{formatDate(student.birth_date)}</td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center gap-2">
                           <button
                             onClick={() => handleEdit(student)}
-                            className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium"
+                            className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 text-sm"
                           >
                             ✏️ Edit
                           </button>
                           <button
                             onClick={() => handleDelete(student.id)}
-                            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+                            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 text-sm"
                           >
                             🗑️ Hapus
                           </button>
@@ -952,167 +853,280 @@ const uploadTeacherPhoto = async (
               </tbody>
             </table>
           </div>
+
+          {/* Pagination untuk Siswa */}
           {filteredStudents.length > 0 && (
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
-              <p className="text-sm text-slate-600">
-                Menampilkan{" "}
-                <span className="font-semibold text-teal-600">
-                  {filteredStudents.length}
-                </span>{" "}
-                dari{" "}
-                <span className="font-semibold text-teal-600">
-                  {students.length}
-                </span>{" "}
-                siswa
-              </p>
+            <div className="bg-slate-50 px-6 py-6 border-t border-slate-200">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-sm text-slate-600">
+                  Menampilkan <span className="font-semibold text-teal-600">{startIndexStudents + 1}-{Math.min(endIndexStudents, filteredStudents.length)}</span> dari{' '}
+                  <span className="font-semibold text-teal-600">{filteredStudents.length}</span> siswa
+                  {searchTerm && ' (hasil pencarian)'}
+                </p>
+                
+                <Pagination
+                  currentPage={currentPageStudents}
+                  totalPages={totalPagesStudents}
+                  onPageChange={handlePageChangeStudents}
+                  color="teal"
+                />
+              </div>
             </div>
           )}
         </div>
 
-        {/* ===================== DATA GURU ===================== */}
-        <div className="mt-20 bg-white rounded-3xl shadow-lg overflow-hidden">
-          {/* HEADER */}
-          <div className="px-6 py-6 border-b border-slate-200 flex flex-col md:flex-row justify-between md:items-center gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800">Data Guru</h2>
-              <p className="text-slate-600 mt-1">
-                Total: {teachers.length} guru
-              </p>
-            </div>
+        {/* ===================  TABEL GURU =================== */}
+        <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+          {/* Header dengan Search */}
+          <div className="px-6 py-6 border-b border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Daftar Guru</h2>
+                <p className="text-slate-600 mt-1">
+                  Total: {teachers.length} guru | 
+                  Ditampilkan: {currentTeachers.length} dari {filteredTeachers.length} hasil pencarian
+                </p>
+              </div>
 
-            <div className="flex gap-3 w-full md:w-auto">
-              <input
-                type="text"
-                placeholder="Cari guru / mapel..."
-                value={teacherSearch}
-                onChange={(e) => setTeacherSearch(e.target.value)}
-                className="flex-1 md:w-64 px-4 py-2 border border-slate-300 rounded-full focus:ring-2 focus:ring-indigo-400 outline-none"
-              />
+              <div className="flex gap-3 w-full md:w-auto">
+                <input
+                  type="text"
+                  placeholder="Cari guru / mapel..."
+                  value={searchTeacher}
+                  onChange={(e) => setSearchTeacher(e.target.value)}
+                  className="flex-1 md:w-64 px-4 py-2 border border-slate-300 rounded-full focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none"
+                />
 
-              <button
-                onClick={() => {
-                  setShowTeacherForm(true);
-                  setEditingTeacherId(null);
-                  setTeacherForm({ name: "", email: "", subject: "" });
-                }}
-                className="bg-indigo-500 text-white px-6 py-3 rounded-full hover:bg-indigo-600 transition-colors shadow-md font-medium"
-              >
-                + Tambah Guru
-              </button>
+                <button
+                  onClick={handleAddTeacher}
+                  className="bg-purple-500 text-white px-6 py-3 rounded-full hover:bg-purple-600 transition-colors shadow-md font-medium whitespace-nowrap"
+                >
+                  + Tambah Guru
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* FORM */}
+          {/* Form Guru */}
           {showTeacherForm && (
-            <div className="px-6 py-6 bg-slate-50 border-b">
-              <h3 className="text-xl font-bold mb-4">
-                {editingTeacherId ? "Edit Guru" : "Tambah Guru"}
+            <div className="px-6 py-6 bg-slate-50 border-b border-slate-200">
+              <h3 className="text-xl font-bold text-slate-800 mb-4">
+                {editingTeacherId ? 'Edit Guru' : 'Tambah Guru Baru'}
               </h3>
+              <form onSubmit={handleSubmitTeacher} className="space-y-4">
+                {/* Upload Foto */}
+                <div className="flex gap-4 items-start">
+                  <div className="w-32 h-40 bg-slate-200 rounded-xl overflow-hidden flex items-center justify-center">
+                    {teacherPhotoPreview ? (
+                      <img src={teacherPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      id="teacher-photo"
+                      accept="image/*"
+                      onChange={handleTeacherPhotoChange}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="teacher-photo"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg cursor-pointer hover:bg-purple-600"
+                    >
+                      📷 Pilih Foto
+                    </label>
+                    <p className="text-sm text-slate-500 mt-2">Max 2MB (JPG, PNG)</p>
+                  </div>
+                </div>
 
-              <form
-                onSubmit={handleTeacherSubmit}
-                className="grid md:grid-cols-3 gap-4"
-              >                
-                <input
-                  type="text"
-                  placeholder="Nama Guru"
-                  value={teacherForm.name}
-                  onChange={(e) =>
-                    setTeacherForm({ ...teacherForm, name: e.target.value })
-                  }
-                  className="px-4 py-3 border rounded-xl"
-                  required
-                />
-                <input
-                  type="email"
-                  placeholder="Email Guru"
-                  value={teacherForm.email}
-                  onChange={(e) =>
-                    setTeacherForm({ ...teacherForm, email: e.target.value })
-                  }
-                  className="px-4 py-3 border rounded-xl"
-                  required
-                />
-                <input
-                  type="text"
-                  placeholder="Mata Pelajaran"
-                  value={teacherForm.subject}
-                  onChange={(e) =>
-                    setTeacherForm({ ...teacherForm, subject: e.target.value })
-                  }
-                  className="px-4 py-3 border rounded-xl"
-                  required
-                />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Nama Lengkap *"
+                    value={teacherFormData.name}
+                    onChange={(e) => setTeacherFormData({...teacherFormData, name: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
+                    required
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email *"
+                    value={teacherFormData.email}
+                    onChange={(e) => setTeacherFormData({...teacherFormData, email: e.target.value})}
+                    className="px-4 py-3 border rounded-xl"
+                    required
+                  />
+                </div>
 
-                <div className="md:col-span-3 flex gap-3">
-                  <button className="bg-indigo-500 text-white px-6 py-3 rounded-full">
-                    Simpan
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="teacher_gender"
+                      value="Laki-laki"
+                      checked={teacherFormData.teacher_gender === 'Laki-laki'}
+                      onChange={(e) => setTeacherFormData({...teacherFormData, teacher_gender: e.target.value})}
+                      required
+                    />
+                    👨 Laki-laki
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="teacher_gender"
+                      value="Perempuan"
+                      checked={teacherFormData.teacher_gender === 'Perempuan'}
+                      onChange={(e) => setTeacherFormData({...teacherFormData, teacher_gender: e.target.value})}
+                      required
+                    />
+                    👩 Perempuan
+                  </label>
+                </div>
+
+                {/* Multi-select Mata Pelajaran */}
+                <div>
+                  <label className="block text-slate-700 font-medium mb-2">
+                    Mata Pelajaran <span className="text-red-500">*</span>
+                    <span className="text-sm text-slate-500 ml-2">(Bisa pilih lebih dari 1)</span>
+                  </label>
+                  <Select
+                    isMulti
+                    options={getAvailableSubjects()}
+                    value={teacherFormData.subjects.map(s => ({value: s, label: s}))}
+                    onChange={(selected) => {
+                      setTeacherFormData({
+                        ...teacherFormData, 
+                        subjects: selected ? selected.map(s => s.value) : []
+                      });
+                    }}
+                    placeholder="Pilih mata pelajaran..."
+                    className="text-left"
+                    styles={{
+                      control: (base) => ({
+                        ...base,
+                        padding: '6px',
+                        borderRadius: '12px',
+                        borderColor: '#cbd5e1',
+                        '&:hover': { borderColor: '#a855f7' }
+                      }),
+                      multiValue: (base) => ({
+                        ...base,
+                        backgroundColor: '#f3e8ff',
+                      }),
+                      multiValueLabel: (base) => ({
+                        ...base,
+                        color: '#7e22ce',
+                        fontWeight: '500'
+                      })
+                    }}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    💡 Mapel yang sudah dipilih guru lain tidak bisa dipilih lagi
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={uploadingTeacher}
+                    className="bg-purple-500 text-white px-6 py-3 rounded-full hover:bg-purple-600 disabled:opacity-50"
+                  >
+                    {uploadingTeacher ? '⏳ Menyimpan...' : '💾 Simpan'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowTeacherForm(false)}
-                    className="bg-slate-400 text-white px-6 py-3 rounded-full"
+                    onClick={() => {
+                      setShowTeacherForm(false);
+                      setEditingTeacherId(null);
+                      setTeacherFormData({name:'', email:'', subjects:[], teacher_gender: ''});
+                      setTeacherPhotoFile(null);
+                      setTeacherPhotoPreview('');
+                    }}
+                    className="bg-slate-400 text-white px-6 py-3 rounded-full hover:bg-slate-500"
                   >
-                    Batal
+                    ✖️ Batal
                   </button>
                 </div>
               </form>
             </div>
           )}
 
-          {/* TABLE */}
+          {/* Tabel Guru */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-700">
+              <thead className="bg-purple-600">
                 <tr>
-                  <th className="px-6 py-4 text-left text-white">No</th>
-                  <th className="px-6 py-4 text-left text-white">Nama</th>
-                  <th className="px-6 py-4 text-left text-white">Email</th>
-                  <th className="px-6 py-4 text-left text-white">Mapel</th>
-                  <th className="px-6 py-4 text-center text-white">Aksi</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">No</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Foto</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Nama</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Jenis Kelamin</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Email</th>
+                  <th className="px-6 py-4 text-left text-white font-semibold">Mata Pelajaran</th>
+                  <th className="px-6 py-4 text-center text-white font-semibold">Aksi</th>
                 </tr>
               </thead>
-
-              <tbody className="divide-y">
-                {loadingTeacher ? (
+              <tbody className="divide-y divide-slate-200">
+                {currentTeachers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center">
-                      ⏳ Memuat guru...
-                    </td>
-                  </tr>
-                ) : filteredTeachers.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="py-10 text-center text-slate-500"
-                    >
-                      👨‍🏫 Data guru kosong
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      <div className="text-6xl mb-4">👨‍🏫</div>
+                      <p className="text-lg font-medium">
+                        {searchTeacher ? 'Tidak ada hasil pencarian' : 'Belum ada data guru'}
+                      </p>
                     </td>
                   </tr>
                 ) : (
-                  filteredTeachers.map((t, i) => (
-                    <tr key={t.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4">{i + 1}</td>
-                      <td className="px-6 py-4 font-medium">{t.name}</td>
-                      <td className="px-6 py-4">{t.email}</td>
+                  currentTeachers.map((teacher, index) => (
+                    <tr key={teacher.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 text-slate-700">{startIndexTeachers + index + 1}</td>
                       <td className="px-6 py-4">
-                        <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm">
-                          {t.subject}
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200">
+                          {teacher.photo_url ? (
+                            <img src={teacher.photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-slate-800 font-medium">{teacher.name}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                          teacher.teacher_gender === 'Laki-laki' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
+                        }`}>
+                          {teacher.teacher_gender === 'Laki-laki' ? '👨' : '👩'} {teacher.teacher_gender}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-700">{teacher.email}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {teacher.subjects && teacher.subjects.map((subject, idx) => (
+                            <span key={idx} className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium">
+                              {subject}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex justify-center gap-2">
                           <button
-                            onClick={() => handleEditTeacher(t)}
-                            className="bg-amber-500 text-white px-4 py-2 rounded-lg"
+                            onClick={() => handleEditTeacher(teacher)}
+                            className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 text-sm"
                           >
-                            ✏️Edit
+                            ✏️ Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteTeacher(t.id)}
-                            className="bg-red-500 text-white px-4 py-2 rounded-lg"
+                            onClick={() => handleDeleteTeacher(teacher.id)}
+                            className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 text-sm"
                           >
-                            🗑️Hapus
+                            🗑️ Hapus
                           </button>
                         </div>
                       </td>
@@ -1122,6 +1136,26 @@ const uploadTeacherPhoto = async (
               </tbody>
             </table>
           </div>
+
+          {/* Pagination untuk Guru */}
+          {filteredTeachers.length > 0 && (
+            <div className="bg-slate-50 px-6 py-6 border-t border-slate-200">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-sm text-slate-600">
+                  Menampilkan <span className="font-semibold text-purple-600">{startIndexTeachers + 1}-{Math.min(endIndexTeachers, filteredTeachers.length)}</span> dari{' '}
+                  <span className="font-semibold text-purple-600">{filteredTeachers.length}</span> guru
+                  {searchTeacher && ' (hasil pencarian)'}
+                </p>
+                
+                <Pagination
+                  currentPage={currentPageTeachers}
+                  totalPages={totalPagesTeachers}
+                  onPageChange={handlePageChangeTeachers}
+                  color="purple"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

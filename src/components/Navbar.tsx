@@ -125,20 +125,12 @@ const Navbar: React.FC = () => {
                           Daftar
                         </Link>
                         <Link 
-                          href="/dashboard/nilai-rapor"
+                          href="/grades"
                           className={`block px-4 py-2 text-sm hover:bg-slate-600 transition-colors ${
-                            isActive('/dashboard/nilai-rapor') ? 'text-white bg-slate-600' : 'text-gray-300'
+                            isActive('/dashboard/grades') ? 'text-white bg-slate-600' : 'text-gray-300'
                           }`}
                         >
                           Nilai & Rapor
-                        </Link>
-                        <Link 
-                          href="/dashboard/presensi"
-                          className={`block px-4 py-2 text-sm hover:bg-slate-600 transition-colors ${
-                            isActive('/dashboard/presensi') ? 'text-white bg-slate-600' : 'text-gray-300'
-                          }`}
-                        >
-                          Presensi
                         </Link>
                       </div>
                     )}
